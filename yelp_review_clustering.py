@@ -12,6 +12,11 @@ import matplotlib.cm as cm
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+# Import WordCloud and STOPWORDS
+from sklearn import metrics
+from wordcloud import WordCloud
+from wordcloud import STOPWORDS
+
 
 print("=========Starting Data cleaning=========")
 
@@ -106,6 +111,56 @@ def save_tfidf_file(x_data, y_columns):
     df = pd.DataFrame(data=count_array,columns = y_columns)
     df.to_csv("Dataset/vectorizer_output.csv.gz", sep='\t', compression='gzip')
     print("vectorizer output file generated")
+
+#--------NLP---------------
+import os
+import nltk
+from nltk.corpus import PlaintextCorpusReader
+from nltk.probability import FreqDist
+from nltk.corpus import stopwords
+import os 
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+
+def build_word_corpus(category_name):
+    print ('Building word corpus of %s category'%category_name)
+    root=os.path.join(dir_path+'/Data/Categorized','dir_category_'+category_name.replace(' ','_').replace('/','_'))
+    plain_text_reader=PlaintextCorpusReader(root,'.*')
+    return plain_text_reader
+
+def get_preprocessed_corpus_text(text_reader):
+    print ('Removing the common stopwords')
+    print ('Removing non alphanumeric words')
+    print ('Converting all words into lowercase')
+    s=stopwords.words()
+    all_words=text_reader.words()
+    t=nltk.Text(w.lower() for w in all_words if w.lower() not in s and w.isalpha())
+    return t     
+
+def plot_word_frequency_distribution(text,top=50):
+    print ('Computing and plotting the frequency distribution for top %d words in the text'%top)
+    fd=FreqDist(text)
+    fd.plot(top)
+
+def get_word_corpus_statistics(word_corpus):
+    words=len(word_corpus.words())
+    sentences=len(word_corpus.sents())
+    characters=len(word_corpus.raw())
+    unique_words=len(set(w.lower() for w  in word_corpus.words() if w.isalnum()))
+    number_of_files=len(word_corpus.fileids())
+    print ('Number of documents: ',number_of_files)
+    print ('Number of characters: ',characters)
+    print ('Number of sentences: ',sentences)
+    print ('Number of words: ',words)
+    print ('Number of unique words: ',unique_words)
+  
+def print_frequency_distribution():
+    word_corpus = build_word_corpus('Chinese')
+    print ('Chinese Restaturant Word Corpus Statistics')
+    get_word_corpus_statistics(word_corpus)
+    chinese_text=get_preprocessed_corpus_text(word_corpus)
+    plot_word_frequency_distribution(chinese_text)  
+#-----------------------  
 
 #Unigram = 1, Bigram= 2, ...ngram to understand meaning in token of reviews
 def vectorize_reviews2(reviews):
@@ -237,6 +292,79 @@ def get_top_keywords_per_clusters(data, clusters, labels, n_terms):
             
 get_top_keywords_per_clusters(X, clusters, words, 50)
 
+# Initialize regex tokenizer
+tokenizer = RegexpTokenizer(r'\w+')
+
+# # Vectorize document using TF-IDF
+tf_idf_vect = TfidfVectorizer(lowercase=True,  min_df = 5, max_df = 0.95, max_features = 8000, stop_words = 'english', ngram_range = (1, 3),                        tokenizer = tokenizer.tokenize)
 
 
+reviews = company_df['text'].values
+X, words = vectorize_reviews2(reviews)
+# Fit and Transfrom Text Data
+X_train_counts = tf_idf_vect.fit_transform(reviews)
 
+# Check Shape of Count Vector
+X_train_counts.shape
+
+# Import KMeans Model
+from sklearn.cluster import KMeans
+
+# Create Kmeans object and fit it to the training data 
+kmeans = KMeans(n_clusters=7).fit(X_train_counts)
+
+# Get the labels using KMeans
+pred_labels = kmeans.labels_
+
+# Compute DBI score
+dbi = metrics.davies_bouldin_score(X_train_counts.toarray(), pred_labels)
+
+# Compute Silhoutte Score
+ss = metrics.silhouette_score(X_train_counts.toarray(), pred_labels , metric='euclidean')
+
+# Print the DBI and Silhoutte Scores
+print("DBI Score: ", dbi, "\nSilhoutte Score: ", ss)
+
+
+print(np.unique(pred_labels, return_counts=True))
+#np.unique(pred_labels)
+
+print("=========Saving word cloud per cluster========")
+
+def word_cloud(text,wc_title,wc_file_name='wordcloud.jpeg'):
+    # Create stopword list
+    stopword_list = set(STOPWORDS) 
+
+    # Create WordCloud 
+    word_cloud = WordCloud(width = 800, height = 500, 
+                           background_color ='white', 
+                           stopwords = stopword_list, 
+                           min_font_size = 14).generate(text) 
+
+    # Set wordcloud figure size
+    plt.figure(figsize = (8, 6)) 
+    
+    # Set title for word cloud
+    plt.title(wc_title)
+    
+    # Show image
+    plt.imshow(word_cloud) 
+
+    # Remove Axis
+    plt.axis("off")  
+
+    # save word cloud
+    plt.savefig(wc_file_name,bbox_inches='tight')
+
+    # show plot
+    plt.show()
+
+
+df=pd.DataFrame({"text":reviews,"labels":pred_labels})
+for i in df.labels.unique():
+    new_df=df[df.labels==i]
+    text="".join(new_df.text.tolist())
+    word_cloud(text,"Cluster "+str(i), "cluster"+str(i)+'.jpeg')
+
+company_df['cluster_labels'] = pred_labels
+cluster0_data = company_df[company_df["cluster_labels"] == 0]
