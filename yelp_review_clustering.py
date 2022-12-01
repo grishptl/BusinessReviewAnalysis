@@ -299,7 +299,7 @@ tokenizer = RegexpTokenizer(r'\w+')
 tf_idf_vect = TfidfVectorizer(lowercase=True,  min_df = 5, max_df = 0.95, max_features = 8000, stop_words = 'english', ngram_range = (1, 3),                        tokenizer = tokenizer.tokenize)
 
 
-reviews = company_df['text'].values
+reviews = business_df['text'].values
 X, words = vectorize_reviews2(reviews)
 # Fit and Transfrom Text Data
 X_train_counts = tf_idf_vect.fit_transform(reviews)
@@ -366,5 +366,5 @@ for i in df.labels.unique():
     text="".join(new_df.text.tolist())
     word_cloud(text,"Cluster "+str(i), "cluster"+str(i)+'.jpeg')
 
-company_df['cluster_labels'] = pred_labels
-cluster0_data = company_df[company_df["cluster_labels"] == 0]
+business_df['cluster_labels'] = pred_labels
+cluster0_data = business_df[business_df["cluster_labels"] == 0]
